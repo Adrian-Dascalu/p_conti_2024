@@ -17,6 +17,7 @@ using MixedReality.Toolkit.SpatialManipulation;
 using Microsoft.MixedReality.OpenXR;
 using UnityEngine.UIElements;
 using TMPro;
+using Unity.VisualScripting;
 
 public class GOScript : MonoBehaviour
 {
@@ -28,10 +29,16 @@ public class GOScript : MonoBehaviour
 
     private ARMarker rb;
 
-    private bool qrCodeCoordinatesCorected = false;
+    private bool[] qrCodeCoordinatesCorected = { false };
 
-    private bool qrCodeAdded = false;
-    
+    private bool[] qrCodeAdded = { false };
+
+    public int qrCodeID;
+
+    private Dictionary<int, GameObject> qrCodeSlates = new Dictionary<int, GameObject>();
+
+    GameObject[] newSlate;
+
     bool delayForQRCodeTextStarted = false;
     bool delayForQRCodeCoordinatesStarted = false;
     bool delayForQRCodeIDStarted = false;
@@ -39,43 +46,28 @@ public class GOScript : MonoBehaviour
     [SerializeField]
     GameObject quad;
 
-    /*[SerializeField]
-    private ARMarker m_marker;
-
-    [SerializeField]
-    private MeshRenderer m_markerRenderer;*/
-
-    //private string m_text = "Marker text";
-    //private const int m_countToUpdateFrame = 10;
-    //private int m_countUntilNextUpdate = 0;
-    /*
-    public string UpdateText()
-    {
-        if(m_marker != null && m_countUntilNextUpdate-- <= 0)
-        {
-            m_countUntilNextUpdate = m_countToUpdateFrame;
-
-            m_text = $"{m_marker.trackableId} {m_marker.trackingState}\n" +
-                     $"DurationSinceLastSeen (s): {Math.Round(Time.realtimeSinceStartup - m_marker.lastSeenTime, 2)}\n " +
-                     $"{Math.Round(m_marker.lastSeenTime, 2)}";
-        }
-
-        return m_text;
-    }*/
+    private bool[] qrCodeSlatesActive = { false };
 
     public void SlateClosed()
     {
         Debug.Log("Slate closed");
 
-        qrCodeCoordinatesCorected = false;
+        qrCodeCoordinatesCorected[qrCodeID] = false;
 
-        qrCodeAdded = false;
+        qrCodeAdded[qrCodeID] = false;
+
+        qrCodeSlatesActive[qrCodeID] = false;
+
+        qrCodeSlates.Remove(qrCodeID);
     }
 
     void OnQRCodesChanged(ARMarkersChangedEventArgs args)
     {
         foreach (ARMarker qrCode in args.added)
         {
+            if(qrCode.GetInstanceID() < 0) qrCodeID = -qrCode.GetInstanceID();
+            else qrCodeID = qrCode.GetInstanceID();
+            
             text1 = qrCode.GetDecodedString();
             var text = qrCode.GetDecodedString();
             Debug.Log($"QR code text: {text}");
@@ -90,17 +82,46 @@ public class GOScript : MonoBehaviour
                 Debug.Log($"Created Track qr with id {qrCode.trackableId}");
                 Debug.Log($"Created QR code properties: {qrCode.GetQRCodeProperties()}");
                 Debug.Log($"Created QR code coordinates: { qrCode.transform.position}");
+
+                if(!qrCodeSlates.ContainsKey(qrCodeID))
+                {
+                    GameObject slate = GameObject.Instantiate(quad, qrCode.transform.position, qrCode.transform.rotation);
+                    qrCodeSlates.Add(qrCodeID, slate);
+                    //qrCodeSlates[qrCodeID] = slate;
+
+                    qrCodeSlates[qrCodeID].SetActive(true);
+                    slate.SetActive(true);
+
+                    //newSlate[qrCode.GetInstanceID()] = GameObject.Instantiate(quad, qrCode.transform.position, qrCode.transform.rotation);
+                    //newSlate[qrCode.GetInstanceID()].SetActive(true);
+
+                    //slate.GetComponentInChildren<TextMeshPro>().text = text;
+
+                    if(qrCode.GetInstanceID() < 0) qrCodeID = -qrCode.GetInstanceID();
+                    else qrCodeID = qrCode.GetInstanceID();
+
+                    Debug.Log("Created slate for qr code with id: " + qrCodeID);
+                }
+                else
+                {
+                    qrCodeSlates[qrCodeID].SetActive(true);
+
+                    Debug.Log("Set slate for qr code with id: " + qrCodeID);
+                }
             }
 
             rb = qrCode;
 
-            qrCodeCoordinatesCorected = false;
+            qrCodeCoordinatesCorected[qrCodeID] = false;
 
-            qrCodeAdded = true;
+            qrCodeAdded[qrCodeID] = true;
         }
 
         foreach(ARMarker qrCode in args.updated)
         {
+            if(qrCode.GetInstanceID() < 0) qrCodeID = -qrCode.GetInstanceID();
+            else qrCodeID = qrCode.GetInstanceID();
+
             QRCode = qrCode;
 
             text1 = qrCode.GetDecodedString();
@@ -123,7 +144,7 @@ public class GOScript : MonoBehaviour
 
             Debug.Log("rb.transform.position.x - qrCode.transform.position.x: " + (rb.transform.position.x - qrCode.transform.position.x));
 
-            if (!qrCodeCoordinatesCorected)
+            if (!qrCodeCoordinatesCorected[qrCodeID])
             {
                 if (!(rb.transform.position.x - qrCode.transform.position.x < 0.2 && rb.transform.position.x - qrCode.transform.position.x > -0.2))
                 {
@@ -133,7 +154,7 @@ public class GOScript : MonoBehaviour
 
                     Debug.Log("QR code x position: " + qrCode.transform.position.x);
 
-                    qrCodeCoordinatesCorected = true;
+                    qrCodeCoordinatesCorected[qrCodeID] = true;
                 }
                 else if (!(rb.transform.position.y - qrCode.transform.position.y < 0.2 && rb.transform.position.y - qrCode.transform.position.y > -0.2))
                 {
@@ -143,7 +164,7 @@ public class GOScript : MonoBehaviour
 
                     Debug.Log("QR code y position: " + qrCode.transform.position.y);
 
-                    qrCodeCoordinatesCorected = true;
+                    qrCodeCoordinatesCorected[qrCodeID] = true;
                 }
                 else if (!(rb.transform.position.z - qrCode.transform.position.z < 0.2 && rb.transform.position.z - qrCode.transform.position.z > -0.2))
                 {
@@ -153,10 +174,20 @@ public class GOScript : MonoBehaviour
 
                     Debug.Log("QR code z position: " + qrCode.transform.position.z);
                     
-                    qrCodeCoordinatesCorected = true;
+                    qrCodeCoordinatesCorected[qrCodeID] = true;
                 }
                 
                 rb = qrCode;
+                
+                if (qrCodeSlatesActive[qrCodeID] == false)
+                {
+                    qrCodeSlates[qrCodeID].SetActive(true);
+                }
+            }
+
+            if (qrCodeSlatesActive[qrCodeID] == false)
+            {
+                qrCodeSlates[qrCodeID].SetActive(true);
             }
         }
     }
@@ -210,7 +241,7 @@ public class GOScript : MonoBehaviour
 
     public void PrintQRCodeID()
     {
-        Debug.Log("QR code ID: " + QRCode.trackableId);
+        Debug.Log("QR code ID: " + qrCodeID);
 
         delayForQRCodeIDStarted = false;
     }
@@ -225,12 +256,12 @@ public class GOScript : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-
         //quad.transform.position = GameObject.Find("GameObject").transform.position;
 
         //quad.SetActive(true);
         //show the text in the console
-        if (qrCodeAdded)
+
+        /*if (qrCodeAdded[qrCodeID])
         {
             if (!delayForQRCodeTextStarted)
             {
@@ -253,7 +284,7 @@ public class GOScript : MonoBehaviour
 
                 CallAfterDelay.Create(2.0f, PrintQRCodeCoordinates);
             }
-        }
+        }*/
 
         /*if (m_marker != null && m_markerRenderer != null)
         {
